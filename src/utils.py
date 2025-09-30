@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from requests import RequestException
 
 TOP_TRANSACTION_NUMBER = 5
+TOP_EXPENSES_NUMBER = 7
+
 data_path = os.path.join('..', 'data', 'operations.xlsx')
 path_to_settings = os.path.join('..', 'user_settings.json')
 
@@ -46,6 +48,23 @@ def create_dt_obj(date_time: str) -> datetime.datetime:
     return datetime.datetime.strptime(date_time, '%d.%m.%Y %H:%M:%S')
 
 
+def reference_filter(data: list[dict], date_time: str, reference: str) -> Union[list[dict], None]:
+    if reference == 'ALL':
+        return list(filter(lambda x: create_dt_obj(x['Дата операции']) <= create_dt_obj(date_time), data))
+    if reference == 'M':
+        return list(filter(lambda x: create_dt_obj(x['Дата операции']).month == create_dt_obj(date_time).month and
+                           create_dt_obj(x['Дата операции']).year == create_dt_obj(date_time).year, data))
+    if reference == 'Y':
+        return list(filter(lambda x: create_dt_obj(x['Дата операции']).year == create_dt_obj(date_time).year, data))
+    if reference == 'W':
+        dt = create_dt_obj(date_time)
+        dt_weekday_number = dt.weekday() # 0..6
+        dt_start = dt - datetime.timedelta(days=dt_weekday_number)
+        dt_end = dt + datetime.timedelta(days=6) - datetime.timedelta(days=dt_weekday_number)
+        return list(filter(lambda x: dt_start <= create_dt_obj(x['Дата операции']) <= dt_end, data))
+    return None
+
+
 def greetings(date_time: str) -> str:
     dt = create_dt_obj(date_time)
     hours = dt.hour
@@ -78,8 +97,12 @@ def cards(data: list[dict]) -> list[dict]:
     return result
 
 
-def top_transactions(data: list[dict]) -> list[dict]:
-    good_transactions = list(filter(lambda x: x["Статус"] == "OK", data))
+def top_transactions(data: list[dict], date_time: str) -> list[dict]:
+    dt = create_dt_obj(date_time)
+    good_transactions = filter(lambda x: x["Статус"] == "OK" and
+                                        create_dt_obj(x['Дата операции']).year == dt.year and
+                                        create_dt_obj(x['Дата операции']).month == dt.month and
+                                        create_dt_obj(x['Дата операции']).day <= dt.day, data)
     return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)[:TOP_TRANSACTION_NUMBER]
 
 
@@ -117,6 +140,12 @@ def currency_rates(date_time: str) -> Union[list[dict], None]:
 
 def stock_prices(date_time: str) -> Union[list[dict], None]:
     dt = create_dt_obj(date_time)
+    dt_beg = create_dt_obj("01.01.2000 00:00:00")
+
+    if dt < dt_beg:
+        utils_logger.error("Дата вне диапазона alphavantage")
+        return None
+
     load_dotenv()
 
     try:
@@ -135,9 +164,12 @@ def stock_prices(date_time: str) -> Union[list[dict], None]:
             )
             response_api = requests.request("GET", api_url)
             response = json.loads(response_api.text)
-            result.append({"stock": stock, "price": response["Time Series (Daily)"]
-                                                            [dt.strftime('%Y-%m-%d')]
-                                                            ["4. close"]})
+            day = dt.strftime('%Y-%m-%d')
+            while day not in response["Time Series (Daily)"]:
+                dt_day = datetime.datetime.strptime(day, "%Y-%m-%d")
+                dt_day -= datetime.timedelta(days=1)
+                day = dt_day.strftime('%Y-%m-%d')
+            result.append({"stock": stock, "price": response["Time Series (Daily)"][day]["4. close"]})
         utils_logger.debug("Получен ответ API")
     except RequestException as e:
         utils_logger.error(e)
@@ -146,5 +178,48 @@ def stock_prices(date_time: str) -> Union[list[dict], None]:
     return result
 
 
+def calculate_finance(data: list[dict], date_time: str, reference: str = "M") -> (dict, dict):
+    data_filtered = reference_filter(data, date_time, reference)
+    total_amount_expenses = 0
+    total_amount_income = 0
+    expenses_dict = dict()
+    income_dict = dict()
+    for data in data_filtered:
+        if data["Сумма операции"] < 0:
+            if data["Категория"] in expenses_dict:
+                expenses_dict[data["Категория"]] -= data["Сумма операции"]
+            else:
+                expenses_dict[data["Категория"]] = data["Сумма операции"] * (-1)
+            total_amount_expenses -= data["Сумма операции"]
+        else:
+            if data["Категория"] in income_dict:
+                income_dict[data["Категория"]] += data["Сумма операции"]
+            else:
+                income_dict[data["Категория"]] = data["Сумма операции"]
+            total_amount_income += data["Сумма операции"]
+    expenses_dict = {k: v for k, v in sorted(expenses_dict.items(), key=lambda x: x[1], reverse=True)}
+    income_dict = {k: v for k, v in sorted(income_dict.items(), key=lambda x: x[1], reverse=True)}
+    count = 0
+    expenses_list_main = list()
+    expenses_list_transfers_and_cash = list()
+    for key, value in expenses_dict.items():
+        if not (key == "Наличные" or key == "Переводы"):
+            if count < TOP_EXPENSES_NUMBER:
+                expenses_list_main.append({"category": key, "amount": value})
+            elif count == TOP_EXPENSES_NUMBER:
+                expenses_list_main.append({"category": "Остальное", "amount": value})
+            else:
+                expenses_list_main[-1]["amount"] += value
+            count += 1
+        else:
+            expenses_list_transfers_and_cash.append({"category": key, "amount": value})
+    income_list = [{"category": key, "amount": value} for key, value in income_dict.items()]
+    return ({"total_amount": total_amount_expenses, "main": expenses_list_main,
+                                                    "transfers_and_cash": expenses_list_transfers_and_cash},
+            {"total_amount": total_amount_income, "main": income_list})
+
+
+
 if __name__ == '__main__':
-    print(stock_prices('20.03.2019 17:01:38'))
+    for transaction in top_transactions(read_xlsx_transactions(), '31.12.2021 16:44:00'):
+        print(transaction)
