@@ -11,7 +11,7 @@ TOP_EXPENSES_NUMBER = 7
 data_path = os.path.join('..', 'data', 'operations.xlsx')
 path_to_settings = os.path.join('..', 'user_settings.json')
 
-with open(path_to_settings, "r") as f:
+with open(path_to_settings, "r", encoding="utf-8") as f:
     user_settings = json.load(f)
 
 utils_logger = logging.getLogger(__name__)
@@ -45,10 +45,14 @@ def read_xlsx_transactions() -> list[dict]:
 
 
 def create_dt_obj(date_time: str) -> datetime.datetime:
+    """Создание объекта datetime"""
+
     return datetime.datetime.strptime(date_time, '%d.%m.%Y %H:%M:%S')
 
 
 def reference_filter(data: list[dict], date_time: str, reference: str) -> Union[list[dict], None]:
+    """Выборка значений из data в указанном диапазоне reference ('ALL', 'M', 'Y', 'W') с датой date_time"""
+
     if reference == 'ALL':
         return list(filter(lambda x: create_dt_obj(x['Дата операции']) <= create_dt_obj(date_time), data))
     if reference == 'M':
@@ -66,6 +70,8 @@ def reference_filter(data: list[dict], date_time: str, reference: str) -> Union[
 
 
 def greetings(date_time: str) -> str:
+    """Приветствие в соответствии с временем суток в date_time"""
+
     dt = create_dt_obj(date_time)
     hours = dt.hour
     if 0 <= hours <= 6:
@@ -78,6 +84,8 @@ def greetings(date_time: str) -> str:
 
 
 def cards(data: list[dict]) -> list[dict]:
+    """Вывод информации по картам на основе данных data"""
+
     card_dict = dict()
     data_cards = list(filter(lambda x: isinstance(x["Номер карты"], str), data))
     for data_card in data_cards:
@@ -98,6 +106,8 @@ def cards(data: list[dict]) -> list[dict]:
 
 
 def top_transactions(data: list[dict], date_time: str) -> list[dict]:
+    """Топ транзакций в месяце с указанной датой из списка data"""
+
     dt = create_dt_obj(date_time)
     good_transactions = filter(lambda x: x["Статус"] == "OK" and
                                         create_dt_obj(x['Дата операции']).year == dt.year and
@@ -107,6 +117,8 @@ def top_transactions(data: list[dict], date_time: str) -> list[dict]:
 
 
 def currency_rates(date_time: str) -> Union[list[dict], None]:
+    """Курс валют в указанную дату в соответствии с user_settings.json"""
+
     dt = create_dt_obj(date_time)
     load_dotenv()
 
@@ -139,6 +151,8 @@ def currency_rates(date_time: str) -> Union[list[dict], None]:
 
 
 def stock_prices(date_time: str) -> Union[list[dict], None]:
+    """Стоимость акций в указанную дату в соответствии с user_settings.json"""
+
     dt = create_dt_obj(date_time)
     dt_beg = create_dt_obj("01.01.2000 00:00:00")
 
@@ -179,7 +193,10 @@ def stock_prices(date_time: str) -> Union[list[dict], None]:
 
 
 def calculate_finance(data: list[dict], date_time: str, reference: str = "M") -> (dict, dict):
+    """Подсчет затрат и прибыли по категориям"""
+
     data_filtered = reference_filter(data, date_time, reference)
+    data_filtered = filter(lambda x: x["Статус"] == "OK", data_filtered)
     total_amount_expenses = 0
     total_amount_income = 0
     expenses_dict = dict()
@@ -221,5 +238,4 @@ def calculate_finance(data: list[dict], date_time: str, reference: str = "M") ->
 
 
 if __name__ == '__main__':
-    for transaction in top_transactions(read_xlsx_transactions(), '31.12.2021 16:44:00'):
-        print(transaction)
+    print(calculate_finance(read_xlsx_transactions(),"10.10.2019 00:00:00"))
