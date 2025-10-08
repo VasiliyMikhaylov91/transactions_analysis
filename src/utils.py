@@ -1,15 +1,19 @@
-import datetime, json, logging, os, requests
-from typing import Union
+import datetime
+import json
+import logging
+import os
+from typing import Any, Union
 
 import pandas as pd
+import requests
 from dotenv import load_dotenv
 from requests import RequestException
 
 TOP_TRANSACTION_NUMBER = 5
 TOP_EXPENSES_NUMBER = 7
 
-data_path = os.path.join('..', 'data', 'operations.xlsx')
-path_to_settings = os.path.join('..', 'user_settings.json')
+data_path = os.path.join("..", "data", "operations.xlsx")
+path_to_settings = os.path.join("..", "user_settings.json")
 
 with open(path_to_settings, "r", encoding="utf-8") as f:
     user_settings = json.load(f)
@@ -21,6 +25,7 @@ file_handler.setFormatter(file_formatter)
 file_handler.setLevel(logging.DEBUG)
 utils_logger.addHandler(file_handler)
 utils_logger.setLevel(logging.DEBUG)
+
 
 def read_xlsx_transactions() -> list[dict]:
     """Преобразование указанного *.xlsx файла в список словарей"""
@@ -47,26 +52,31 @@ def read_xlsx_transactions() -> list[dict]:
 def create_dt_obj(date_time: str) -> datetime.datetime:
     """Создание объекта datetime"""
 
-    return datetime.datetime.strptime(date_time, '%d.%m.%Y %H:%M:%S')
+    return datetime.datetime.strptime(date_time, "%d.%m.%Y %H:%M:%S")
 
 
-def reference_filter(data: list[dict], date_time: str, reference: str) -> Union[list[dict], None]:
+def reference_filter(data: list[dict], date_time: str, reference: str) -> list[dict]:
     """Выборка значений из data в указанном диапазоне reference ('ALL', 'M', 'Y', 'W') с датой date_time"""
 
-    if reference == 'ALL':
-        return list(filter(lambda x: create_dt_obj(x['Дата операции']) <= create_dt_obj(date_time), data))
-    if reference == 'M':
-        return list(filter(lambda x: create_dt_obj(x['Дата операции']).month == create_dt_obj(date_time).month and
-                           create_dt_obj(x['Дата операции']).year == create_dt_obj(date_time).year, data))
-    if reference == 'Y':
-        return list(filter(lambda x: create_dt_obj(x['Дата операции']).year == create_dt_obj(date_time).year, data))
-    if reference == 'W':
+    if reference == "ALL":
+        return list(filter(lambda x: create_dt_obj(x["Дата операции"]) <= create_dt_obj(date_time), data))
+    if reference == "M":
+        return list(
+            filter(
+                lambda x: create_dt_obj(x["Дата операции"]).month == create_dt_obj(date_time).month
+                and create_dt_obj(x["Дата операции"]).year == create_dt_obj(date_time).year,
+                data,
+            )
+        )
+    if reference == "Y":
+        return list(filter(lambda x: create_dt_obj(x["Дата операции"]).year == create_dt_obj(date_time).year, data))
+    if reference == "W":
         dt = create_dt_obj(date_time)
-        dt_weekday_number = dt.weekday() # 0..6
+        dt_weekday_number = dt.weekday()  # 0..6
         dt_start = dt - datetime.timedelta(days=dt_weekday_number)
         dt_end = dt + datetime.timedelta(days=6) - datetime.timedelta(days=dt_weekday_number)
-        return list(filter(lambda x: dt_start <= create_dt_obj(x['Дата операции']) <= dt_end, data))
-    return None
+        return list(filter(lambda x: dt_start <= create_dt_obj(x["Дата операции"]) <= dt_end, data))
+    return []
 
 
 def greetings(date_time: str) -> str:
@@ -75,32 +85,32 @@ def greetings(date_time: str) -> str:
     dt = create_dt_obj(date_time)
     hours = dt.hour
     if 0 <= hours <= 6:
-        return 'Доброй ночи'
+        return "Доброй ночи"
     if 6 <= hours <= 12:
-        return 'Доброе утро'
+        return "Доброе утро"
     if 12 <= hours <= 18:
-        return 'Добрый день'
-    return 'Добрый вечер'
+        return "Добрый день"
+    return "Добрый вечер"
 
 
 def cards(data: list[dict]) -> list[dict]:
     """Вывод информации по картам на основе данных data"""
 
-    card_dict = dict()
+    card_dict: dict[str, Any] = dict()
     data_cards = list(filter(lambda x: isinstance(x["Номер карты"], str), data))
     for data_card in data_cards:
         if data_card["Номер карты"] in card_dict:
-            card_dict[data_card["Номер карты"]]["total_spent"] += data_card["Сумма платежа"] *(-1)
+            card_dict[data_card["Номер карты"]]["total_spent"] += data_card["Сумма платежа"] * (-1)
             card_dict[data_card["Номер карты"]]["cashback"] += data_card["Кэшбэк"]
         else:
-            card_dict[data_card["Номер карты"]] = {"total_spent": data_card["Сумма платежа"] * (-1),
-                                                     "cashback": data_card["Кэшбэк"]}
+            card_dict[data_card["Номер карты"]] = {
+                "total_spent": data_card["Сумма платежа"] * (-1),
+                "cashback": data_card["Кэшбэк"],
+            }
 
     result = []
     for key, value in card_dict.items():
-        result.append({"last_digits": key[1:],
-                       "total_spent": value["total_spent"],
-                       "cashback": value["cashback"]})
+        result.append({"last_digits": key[1:], "total_spent": value["total_spent"], "cashback": value["cashback"]})
 
     return result
 
@@ -109,10 +119,13 @@ def top_transactions(data: list[dict], date_time: str) -> list[dict]:
     """Топ транзакций в месяце с указанной датой из списка data"""
 
     dt = create_dt_obj(date_time)
-    good_transactions = filter(lambda x: x["Статус"] == "OK" and
-                                        create_dt_obj(x['Дата операции']).year == dt.year and
-                                        create_dt_obj(x['Дата операции']).month == dt.month and
-                                        create_dt_obj(x['Дата операции']).day <= dt.day, data)
+    good_transactions = filter(
+        lambda x: x["Статус"] == "OK"
+        and create_dt_obj(x["Дата операции"]).year == dt.year
+        and create_dt_obj(x["Дата операции"]).month == dt.month
+        and create_dt_obj(x["Дата операции"]).day <= dt.day,
+        data,
+    )
     return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)[:TOP_TRANSACTION_NUMBER]
 
 
@@ -178,11 +191,11 @@ def stock_prices(date_time: str) -> Union[list[dict], None]:
             )
             response_api = requests.request("GET", api_url)
             response = json.loads(response_api.text)
-            day = dt.strftime('%Y-%m-%d')
+            day = dt.strftime("%Y-%m-%d")
             while day not in response["Time Series (Daily)"]:
                 dt_day = datetime.datetime.strptime(day, "%Y-%m-%d")
                 dt_day -= datetime.timedelta(days=1)
-                day = dt_day.strftime('%Y-%m-%d')
+                day = dt_day.strftime("%Y-%m-%d")
             result.append({"stock": stock, "price": response["Time Series (Daily)"][day]["4. close"]})
         utils_logger.debug("Получен ответ API")
     except RequestException as e:
@@ -192,28 +205,28 @@ def stock_prices(date_time: str) -> Union[list[dict], None]:
     return result
 
 
-def calculate_finance(data: list[dict], date_time: str, reference: str = "M") -> (dict, dict):
+def calculate_finance(data: list[dict], date_time: str, reference: str = "M") -> tuple[dict, dict]:
     """Подсчет затрат и прибыли по категориям"""
 
-    data_filtered = reference_filter(data, date_time, reference)
-    data_filtered = filter(lambda x: x["Статус"] == "OK", data_filtered)
+    data_filtered_ref = reference_filter(data, date_time, reference)
+    data_filtered: list[dict] = list(filter(lambda x: x["Статус"] == "OK", data_filtered_ref))
     total_amount_expenses = 0
     total_amount_income = 0
-    expenses_dict = dict()
-    income_dict = dict()
-    for data in data_filtered:
-        if data["Сумма операции"] < 0:
-            if data["Категория"] in expenses_dict:
-                expenses_dict[data["Категория"]] -= data["Сумма операции"]
+    expenses_dict: dict[str, Any] = dict()
+    income_dict: dict[str, Any] = dict()
+    for transaction in data_filtered:
+        if transaction["Сумма операции"] < 0:
+            if transaction["Категория"] in expenses_dict:
+                expenses_dict[transaction["Категория"]] -= transaction["Сумма операции"]
             else:
-                expenses_dict[data["Категория"]] = data["Сумма операции"] * (-1)
-            total_amount_expenses -= data["Сумма операции"]
+                expenses_dict[transaction["Категория"]] = transaction["Сумма операции"] * (-1)
+            total_amount_expenses -= transaction["Сумма операции"]
         else:
-            if data["Категория"] in income_dict:
-                income_dict[data["Категория"]] += data["Сумма операции"]
+            if transaction["Категория"] in income_dict:
+                income_dict[transaction["Категория"]] += transaction["Сумма операции"]
             else:
-                income_dict[data["Категория"]] = data["Сумма операции"]
-            total_amount_income += data["Сумма операции"]
+                income_dict[transaction["Категория"]] = transaction["Сумма операции"]
+            total_amount_income += transaction["Сумма операции"]
     expenses_dict = {k: v for k, v in sorted(expenses_dict.items(), key=lambda x: x[1], reverse=True)}
     income_dict = {k: v for k, v in sorted(income_dict.items(), key=lambda x: x[1], reverse=True)}
     count = 0
@@ -231,11 +244,15 @@ def calculate_finance(data: list[dict], date_time: str, reference: str = "M") ->
         else:
             expenses_list_transfers_and_cash.append({"category": key, "amount": value})
     income_list = [{"category": key, "amount": value} for key, value in income_dict.items()]
-    return ({"total_amount": total_amount_expenses, "main": expenses_list_main,
-                                                    "transfers_and_cash": expenses_list_transfers_and_cash},
-            {"total_amount": total_amount_income, "main": income_list})
+    return (
+        {
+            "total_amount": total_amount_expenses,
+            "main": expenses_list_main,
+            "transfers_and_cash": expenses_list_transfers_and_cash,
+        },
+        {"total_amount": total_amount_income, "main": income_list},
+    )
 
 
-
-if __name__ == '__main__':
-    print(calculate_finance(read_xlsx_transactions(),"10.10.2019 00:00:00"))
+if __name__ == "__main__":
+    print(calculate_finance(read_xlsx_transactions(), "10.10.2019 00:00:00"))
