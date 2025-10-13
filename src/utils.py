@@ -27,25 +27,11 @@ utils_logger.addHandler(file_handler)
 utils_logger.setLevel(logging.DEBUG)
 
 
-def read_xlsx_transactions() -> list[dict]:
+def read_xlsx_transactions(path_to_data: str = data_path) -> list[dict]:
     """Преобразование указанного *.xlsx файла в список словарей"""
 
-    df = pd.read_excel(data_path)
+    df = pd.read_excel(path_to_data)
     df.fillna({"Кэшбэк": 0}, inplace=True)
-    # df = df.dropna(subset=["Дата операции",
-    #                        "Дата платежа",
-    #                        "Номер карты",
-    #                        "Статус",
-    #                        "Сумма операции",
-    #                        "Валюта операции",
-    #                        "Сумма платежа",
-    #                        "Валюта платежа",
-    #                        "Кэшбэк",
-    #                        "MCC",
-    #                        "Описание",
-    #                        "Бонусы (включая кэшбэк)",
-    #                        "Округление на инвесткопилку",
-    #                        "Сумма операции с округлением"])
     return [dict(df.iloc[i]) for i in range(df.shape[0])]
 
 
@@ -84,11 +70,11 @@ def greetings(date_time: str) -> str:
 
     dt = create_dt_obj(date_time)
     hours = dt.hour
-    if 0 <= hours <= 6:
+    if 0 <= hours <= 5:
         return "Доброй ночи"
-    if 6 <= hours <= 12:
+    if 6 <= hours <= 11:
         return "Доброе утро"
-    if 12 <= hours <= 18:
+    if 12 <= hours <= 17:
         return "Добрый день"
     return "Добрый вечер"
 
@@ -99,34 +85,37 @@ def cards(data: list[dict]) -> list[dict]:
     card_dict: dict[str, Any] = dict()
     data_cards = list(filter(lambda x: isinstance(x["Номер карты"], str), data))
     for data_card in data_cards:
-        if data_card["Номер карты"] in card_dict:
-            card_dict[data_card["Номер карты"]]["total_spent"] += data_card["Сумма платежа"] * (-1)
-            card_dict[data_card["Номер карты"]]["cashback"] += data_card["Кэшбэк"]
-        else:
-            card_dict[data_card["Номер карты"]] = {
-                "total_spent": data_card["Сумма платежа"] * (-1),
-                "cashback": data_card["Кэшбэк"],
-            }
+        if data_card["Статус"] == "OK" and data_card["Сумма платежа"] < 0:
+            if data_card["Номер карты"] in card_dict:
+                card_dict[data_card["Номер карты"]]["total_spent"] += data_card["Сумма платежа"] * (-1)
+                card_dict[data_card["Номер карты"]]["cashback"] += data_card["Кэшбэк"]
+            else:
+                card_dict[data_card["Номер карты"]] = {
+                    "total_spent": data_card["Сумма платежа"] * (-1),
+                    "cashback": data_card["Кэшбэк"],
+                }
 
-    result = []
-    for key, value in card_dict.items():
-        result.append({"last_digits": key[1:], "total_spent": value["total_spent"], "cashback": value["cashback"]})
-
-    return result
+    return [{"last_digits": key[1:],
+             "total_spent": value["total_spent"],
+             "cashback": value["cashback"]}
+            for key, value in card_dict.items()]
 
 
 def top_transactions(data: list[dict], date_time: str) -> list[dict]:
     """Топ транзакций в месяце с указанной датой из списка data"""
 
     dt = create_dt_obj(date_time)
-    good_transactions = filter(
+    good_transactions = list(filter(
         lambda x: x["Статус"] == "OK"
         and create_dt_obj(x["Дата операции"]).year == dt.year
         and create_dt_obj(x["Дата операции"]).month == dt.month
         and create_dt_obj(x["Дата операции"]).day <= dt.day,
         data,
-    )
-    return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)[:TOP_TRANSACTION_NUMBER]
+    ))
+    if len(good_transactions) > TOP_TRANSACTION_NUMBER:
+        return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)[:TOP_TRANSACTION_NUMBER]
+    else:
+        return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)
 
 
 def currency_rates(date_time: str) -> Union[list[dict], None]:
@@ -253,6 +242,3 @@ def calculate_finance(data: list[dict], date_time: str, reference: str = "M") ->
         {"total_amount": total_amount_income, "main": income_list},
     )
 
-
-if __name__ == "__main__":
-    print(calculate_finance(read_xlsx_transactions(), "10.10.2019 00:00:00"))
