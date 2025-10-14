@@ -4,18 +4,18 @@ import re
 from typing import Any
 
 
-def cashback_benefits(data: list[dict], year: int, month: int) -> dict[str, Any]:
+def cashback_benefits(data: list[dict], year: int, month: int) -> str:
     """Функция показывает сколько на каждой категории можно заработать кешбэка в указанном месяце года."""
 
     result: dict[str, Any] = dict()
     for transaction in data:
-        dt = datetime.datetime.strptime(transaction["Дата операции"], "%d.%m.%Y %H:%M:S")
+        dt = datetime.datetime.strptime(transaction["Дата операции"], "%d.%m.%Y %H:%M:%S")
         if dt.year == year and dt.month == month:
             if transaction["Категория"] in result:
                 result[transaction["Категория"]] += transaction["Кэшбэк"]
             else:
                 result[transaction["Категория"]] = transaction["Кэшбэк"]
-    return result
+    return json.dumps(result)
 
 
 def investment_bank(month: str, transactions: list[dict[str, Any]], limit: int) -> float:
@@ -26,10 +26,10 @@ def investment_bank(month: str, transactions: list[dict[str, Any]], limit: int) 
     mon = dt_month.month
     result = 0.0
     for transaction in transactions:
-        dt_trans = datetime.datetime.strptime(transaction["Дата операции"], "%Y-%m-%d")
+        dt_trans = datetime.datetime.strptime(transaction["Дата операции"], "%d.%m.%Y %H:%M:%S")
         if dt_trans.year == year and dt_trans.month == mon:
             result += limit - (transaction["Сумма операции"] % limit)
-    return result
+    return round(result, 2)
 
 
 def simple_search(data: list[dict[str, Any]], search_word: str) -> str:
