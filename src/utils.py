@@ -71,11 +71,15 @@ def greetings(date_time: str) -> str:
     dt = create_dt_obj(date_time)
     hours = dt.hour
     if 0 <= hours <= 5:
+        utils_logger.info("Пользователь зашел ночью")
         return "Доброй ночи"
     if 6 <= hours <= 11:
+        utils_logger.info("Пользователь зашел утром")
         return "Доброе утро"
     if 12 <= hours <= 17:
+        utils_logger.info("Пользователь зашел днем")
         return "Добрый день"
+    utils_logger.info("Пользователь зашел вечером")
     return "Добрый вечер"
 
 
@@ -94,27 +98,31 @@ def cards(data: list[dict]) -> list[dict]:
                     "total_spent": data_card["Сумма платежа"] * (-1),
                     "cashback": data_card["Кэшбэк"],
                 }
-
-    return [{"last_digits": key[1:],
-             "total_spent": value["total_spent"],
-             "cashback": value["cashback"]}
-            for key, value in card_dict.items()]
+    utils_logger.info("Получены данные по картам")
+    return [
+        {"last_digits": key[1:], "total_spent": value["total_spent"], "cashback": value["cashback"]}
+        for key, value in card_dict.items()
+    ]
 
 
 def top_transactions(data: list[dict], date_time: str) -> list[dict]:
     """Топ транзакций в месяце с указанной датой из списка data"""
 
     dt = create_dt_obj(date_time)
-    good_transactions = list(filter(
-        lambda x: x["Статус"] == "OK"
-        and create_dt_obj(x["Дата операции"]).year == dt.year
-        and create_dt_obj(x["Дата операции"]).month == dt.month
-        and create_dt_obj(x["Дата операции"]).day <= dt.day,
-        data,
-    ))
+    good_transactions = list(
+        filter(
+            lambda x: x["Статус"] == "OK"
+            and create_dt_obj(x["Дата операции"]).year == dt.year
+            and create_dt_obj(x["Дата операции"]).month == dt.month
+            and create_dt_obj(x["Дата операции"]).day <= dt.day,
+            data,
+        )
+    )
     if len(good_transactions) > TOP_TRANSACTION_NUMBER:
+        utils_logger.info("Получено нужное количество топ-транзакций")
         return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)[:TOP_TRANSACTION_NUMBER]
     else:
+        utils_logger.info("Получено малое количество топ-транзакций")
         return sorted(good_transactions, key=lambda x: abs(x["Сумма платежа"]), reverse=True)
 
 
@@ -241,4 +249,3 @@ def calculate_finance(data: list[dict], date_time: str, reference: str = "M") ->
         },
         {"total_amount": total_amount_income, "main": income_list},
     )
-
