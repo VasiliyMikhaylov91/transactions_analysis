@@ -12,7 +12,7 @@ MONTH_PERIOD = relativedelta(months=3)
 
 def filter_by_month_period(
     data: pd.DataFrame, date_end: Optional[str] = None
-) -> tuple[pd.DataFrame, datetime.datetime]:
+) -> tuple[list[dict], datetime.datetime]:
     """Выборка данных из data за MONTH_PERIOD до указаной даты date_end"""
 
     if not date_end:
@@ -20,8 +20,9 @@ def filter_by_month_period(
     else:
         date = create_dt_obj(date_end)
     date_start = date - MONTH_PERIOD
-    result_data = data.drop(data[date_start <= data["Дата операции"] <= date].index)
-    return result_data, date_start
+    data_list = [dict(data.iloc[i]) for i in range(data.shape[0])
+                 if date_start <= create_dt_obj(dict(data.iloc[i])["Дата операции"]) <= date]
+    return data_list, date_start
 
 
 def file_record(file_name: str = "record.txt") -> Any:
@@ -32,7 +33,7 @@ def file_record(file_name: str = "record.txt") -> Any:
         def wrap(*args: Any, **kwargs: Any) -> Any:
             with open(file_name, "w") as file:
                 result = func(*args, **kwargs)
-                file.write(result)
+                file.write(str(result))
             return result
 
         return wrap
@@ -45,12 +46,12 @@ def spending_by_category(transactions: pd.DataFrame, category: str, date: Option
     """Функция возвращает траты по заданной категории за последние три месяца (от переданной даты)."""
 
     filtered_by_date, start_date = filter_by_month_period(transactions, date)
-    filtered_by_category = filtered_by_date.query(f'Категория == "{category}"')
+    filtered_by_category = list(filter(lambda x: x["Категория"] == category, filtered_by_date))
     return pd.DataFrame(
         {
             "category": [category],
-            "sum": [filtered_by_category["Сумма операции"].sum()],
-            "start_date": [start_date],
+            "sum": sum([x["Сумма операции"] for x in filtered_by_category]),
+            "start_date": [start_date.strftime("%d.%m.%Y %H:%M:%S")],
             "end_date": [date],
         }
     )
@@ -61,17 +62,26 @@ def spending_by_weekday(transactions: pd.DataFrame, date: Optional[str] = None) 
     """Функция возвращает средние траты в каждый из дней недели за последние три месяца (от переданной даты)."""
 
     filtered_by_date, start_date = filter_by_month_period(transactions, date)
-    filtered_by_date["weekday"] = filtered_by_date["Дата операции"].weekday()
+
+    def calculate_average(weekday_number: int) -> float:
+        filtered_by_weekday = \
+        (
+            list(filter(lambda x: create_dt_obj(x["Дата операции"]).weekday() == weekday_number, filtered_by_date))
+        )
+        length = len(filtered_by_weekday)
+        if length:
+            return round(sum([x["Сумма операции"] for x in filtered_by_weekday]) / len(filtered_by_weekday), 2)
+        return 0.0
     return pd.DataFrame(
         {
-            "monday": [filtered_by_date.query("weekday == 0")["Сумма операции"].mean()],
-            "tuesday": [filtered_by_date.query("weekday == 1")["Сумма операции"].mean()],
-            "wednesday": [filtered_by_date.query("weekday == 2")["Сумма операции"].mean()],
-            "thursday": [filtered_by_date.query("weekday == 3")["Сумма операции"].mean()],
-            "friday": [filtered_by_date.query("weekday == 4")["Сумма операции"].mean()],
-            "saturday": [filtered_by_date.query("weekday == 5")["Сумма операции"].mean()],
-            "sunday": [filtered_by_date.query("weekday == 6")["Сумма операции"].mean()],
-            "start_date": [start_date],
+            "monday": [calculate_average(0)],
+            "tuesday": [calculate_average(1)],
+            "wednesday": [calculate_average(2)],
+            "thursday": [calculate_average(3)],
+            "friday": [calculate_average(4)],
+            "saturday": [calculate_average(5)],
+            "sunday": [calculate_average(6)],
+            "start_date": [start_date.strftime("%d.%m.%Y %H:%M:%S")],
             "end_date": [date],
         }
     )
@@ -82,12 +92,24 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
     """Функция выводит средние траты в рабочий и в выходной день за последние три месяца (от переданной даты)."""
 
     filtered_by_date, start_date = filter_by_month_period(transactions, date)
-    filtered_by_date["weekday"] = filtered_by_date["Дата операции"].weekday()
+
+    def calculate_average(workday: bool = True) -> float:
+        if workday:
+            filtered_by_weekday = list(
+                filter(lambda x: create_dt_obj(x["Дата операции"]).weekday() < 5, filtered_by_date))
+        else:
+            filtered_by_weekday = list(
+                filter(lambda x: create_dt_obj(x["Дата операции"]).weekday() > 4, filtered_by_date))
+        length = len(filtered_by_weekday)
+        if length:
+            return round(sum([x["Сумма операции"] for x in filtered_by_weekday]) / length, 2)
+        return 0.0
+
     return pd.DataFrame(
         {
-            "workday": [filtered_by_date.query("weekday < 5")["Сумма операции"].mean()],
-            "weekend": [filtered_by_date.query("weekday > 4")["Сумма операции"].mean()],
-            "start_date": [start_date],
+            "workday": [calculate_average()],
+            "weekend": [calculate_average(False)],
+            "start_date": [start_date.strftime("%d.%m.%Y %H:%M:%S")],
             "end_date": [date],
         }
     )

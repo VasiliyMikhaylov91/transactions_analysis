@@ -1,4 +1,5 @@
 import pytest
+import pandas as pd
 
 
 @pytest.fixture()
@@ -222,3 +223,9 @@ def search_examples() -> list[dict]:
             "Сумма операции с округлением": 90.41,
         },
     ]
+
+
+@pytest.fixture()
+def test_df() -> pd.DataFrame:
+    df = pd.read_excel("test_transactions.xlsx")
+    return df
