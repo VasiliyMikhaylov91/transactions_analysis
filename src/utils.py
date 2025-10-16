@@ -31,7 +31,7 @@ def read_xlsx_transactions(path_to_data: str = data_path) -> list[dict]:
     """Преобразование указанного *.xlsx файла в список словарей"""
 
     df = pd.read_excel(path_to_data)
-    df.fillna({"Кэшбэк": 0}, inplace=True)
+    df.fillna({"Кэшбэк": 0, "Категория": "", "Номер карты": "", "MCC": 0, "Описание": ""}, inplace=True)
     return [dict(df.iloc[i]) for i in range(df.shape[0])]
 
 

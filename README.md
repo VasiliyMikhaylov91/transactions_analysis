@@ -11,6 +11,8 @@
 5. Установите необходимые зависимости описанные в файле pyproject.toml
 6. Для работы с модулем utils необходимо получить ключ API с https://apilayer.com/marketplace/exchangerates_data-api и https://www.alphavantage.co/support/ Создать файл .env в соответствии с .env.example
 
+## Запуск программы
+Запуск программы осуществляется из файла main.py.
 ## Описание функций
 Основные функции находятся в пакете src
 
