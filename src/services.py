@@ -5,7 +5,10 @@ import re
 from typing import Any
 
 services_logger = logging.getLogger(__name__)
-file_handler = logging.FileHandler("../logs/services.log", encoding="utf-8")
+if __name__ == '__main__':
+    file_handler = logging.FileHandler("../logs/services.log", encoding="utf-8")
+else:
+    file_handler = logging.FileHandler("./logs/services.log", encoding="utf-8")
 file_formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(funcName)s %(message)s")
 file_handler.setFormatter(file_formatter)
 file_handler.setLevel(logging.DEBUG)

@@ -227,5 +227,8 @@ def search_examples() -> list[dict]:
 
 @pytest.fixture()
 def test_df() -> pd.DataFrame:
-    df = pd.read_excel("test_transactions.xlsx")
+    if __name__ == "__main__":
+        df = pd.read_excel("test_transactions.xlsx")
+    else:
+        df = pd.read_excel("tests/test_transactions.xlsx")
     return df

@@ -13,13 +13,19 @@ TOP_TRANSACTION_NUMBER = 5
 TOP_EXPENSES_NUMBER = 7
 
 data_path = os.path.join("..", "data", "operations.xlsx")
-path_to_settings = os.path.join("..", "user_settings.json")
+if __name__ == '__main__':
+    path_to_settings = os.path.join("..", "user_settings.json")
+else:
+    path_to_settings = os.path.join(".", "user_settings.json")
 
 with open(path_to_settings, "r", encoding="utf-8") as f:
     user_settings = json.load(f)
 
 utils_logger = logging.getLogger(__name__)
-file_handler = logging.FileHandler("../logs/utils.log", encoding="utf-8")
+if __name__ == '__main__':
+    file_handler = logging.FileHandler("../logs/utils.log", encoding="utf-8")
+else:
+    file_handler = logging.FileHandler("./logs/utils.log", encoding="utf-8")
 file_formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(funcName)s %(message)s")
 file_handler.setFormatter(file_formatter)
 file_handler.setLevel(logging.DEBUG)
